@@ -1,0 +1,58 @@
+name: Make package
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Bootstrap
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.1.1
+
+      - name: Cache Theos
+        uses: actions/cache@v3
+        with:
+          path: ~/theos
+          key: ${{ runner.os }}-theos-${{ hashFiles('**/install-theos') }}
+
+      - name: Install Theos
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
+
+      - name: Setup Environment
+        run: echo "THEOS=~/theos" >> $GITHUB_ENV
+
+      - name: Make Bootstrap Package
+        run: make package
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4.0.0
+        with:
+          name: Bootstrap-Packages
+          path: ./packages/
+
+  update-release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4.1.0
+        with:
+          name: Bootstrap-Packages
+
+      - name: Create new release
+        uses: ncipollo/release-action@v1
+        with:
+          name: Rolling Release
+          body: These are automatically updated builds of the latest commit.
+          artifacts: "Bootstrap.tipa, com.roothide.bootstrap_0.1-1+debug_iphoneos-arm64e.deb"
+          tag: release-${{ github.run_id }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
