@@ -31,28 +31,21 @@ jobs:
 
       - name: Make Bootstrap Package
         run: make package
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4.0.0
-        with:
-          name: Bootstrap-Packages
-          path: ./packages/
-
-  update-release:
-    name: Release
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4.1.0
-        with:
-          name: Bootstrap-Packages
+      
+      - name: Extract Version from Bootstrap.tipa
+        id: extract_version
+        run: |
+          mkdir extracted
+          unzip -q packages/Bootstrap.tipa -d extracted
+          version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" extracted/Payload/Bootstrap.app/Info.plist)
+          echo "Version extracted: $version"
+          echo "RELEASE_VERSION=$version" >> $GITHUB_ENV
+          rm -rf extracted  # Remove the extracted directory
 
       - name: Create new release
         uses: ncipollo/release-action@v1
         with:
-          name: Rolling Release
+          name: "Bootstrap_${{ env.RELEASE_VERSION }}"
           body: These are automatically updated builds of the latest commit.
-          artifacts: "Bootstrap.tipa, com.roothide.bootstrap_0.1-1+debug_iphoneos-arm64e.deb"
+          artifacts: "./packages/*"
           tag: release-${{ github.run_id }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
