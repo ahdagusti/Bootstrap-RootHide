@@ -1,0 +1,51 @@
+name: Make package
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Bootstrap
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.1.1
+
+      - name: Cache Theos
+        uses: actions/cache@v3
+        with:
+          path: ~/theos
+          key: ${{ runner.os }}-theos-${{ hashFiles('**/install-theos') }}
+
+      - name: Install Theos
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
+
+      - name: Setup Environment
+        run: echo "THEOS=~/theos" >> $GITHUB_ENV
+
+      - name: Make Bootstrap Package
+        run: make package
+      
+      - name: Extract Version from Bootstrap.tipa
+        id: extract_version
+        run: |
+          mkdir extracted
+          unzip -q packages/Bootstrap.tipa -d extracted
+          version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" extracted/Payload/Bootstrap.app/Info.plist)
+          echo "Version extracted: $version"
+          echo "RELEASE_VERSION=$version" >> $GITHUB_ENV
+          rm -rf extracted  # Remove the extracted directory
+
+      - name: Create new release
+        uses: ncipollo/release-action@v1
+        with:
+          name: "Bootstrap_${{ env.RELEASE_VERSION }}"
+          body: These are automatically updated builds of the latest commit.
+          artifacts: "./packages/*"
+          tag: release-${{ github.run_id }}
